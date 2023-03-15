@@ -5,7 +5,7 @@ In the fast-food industry, maintaining clean tables is a critical factor in enha
 ## Solution
 We provide advanced video analytics technology that delivers valuable insights on maintaining optimal cleanliness of customer dining tables. Our cutting-edge system is designed to detect any foreign objects left on a table after a customer has finished their meal. In the event of detection, our real-time dashboard promptly notifies cleaning staff, allowing them to take immediate action and clean the table promptly. 
 
-<img src="images/status_color.png" width="200" height="40" />
+<img src="images/status_color.png" width="300" height="55" />
 
 <img src="images/TC-1024.gif" width="400" height="250"/>
 
