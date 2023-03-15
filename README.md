@@ -12,24 +12,6 @@ We provide advanced video analytics technology that delivers valuable insights o
 ## Directory structure
 
 In this directory, we have provided a custom deepstream pipeline designed for video analytics tasks to ensure table cleanliness. Here is an overview of the file structure and what each file contains:
-
-- `deepstream_tc.py`: This file contains the implementation for a custom pipeline that performs 2-class object detection to detect people and tables, tracking, and an image classifier to detect if the table needs to be cleaned. It takes video input and produces video output.
-
-- `tb_cleanliness_detector.py`: This file contains the custom logic that uses Gstreamer probes to detect whether the table is occupied by people and the cleanliness scenario of the table according to the metadata saved in the Gstreamer buffer.
-  
-- `prepare_ds_triton_model_repo.sh`: The script prepares the model repository by creating a folder structure for the models, copying the necessary files and directories, and converting the models to the required Triton Inference Server format. It also generates the corresponding configuration files for each model.
-
-- `fix_output.py`: The script changes the output of the image classifier onnx model exported from Custom Vision to match what the Triton application expects to receive. We leave the Softmax node as the last node in the graph (removing everything else after it), the tensor then gets reshaped, and that becomes the final output.
-  
-- `Dockerfile`: This file contains the dockerfile for the Edge AI module.
-
-- `configs`: This directory contains the Deepstream configuration files, such as model configurations and tracker configurations.
-
-- `streams`: This directory contains the videos that will be used for inference.
-
-- `common`: This directory contains the packages needed for deepstream python bindings.
-
-
 ```
 Edge AI App
 ├── deepstream_oa.py
@@ -65,6 +47,16 @@ Edge AI App
 └── streams
     └── IMG_1023_3.h264
 ```
+- `deepstream_tc.py`: This file contains the implementation for a custom pipeline that performs 2-class object detection to detect people and tables, tracking, and an image classifier to detect if the table needs to be cleaned. It takes video input and produces video output.
+- `tb_cleanliness_detector.py`: This file contains the custom logic that uses Gstreamer probes to detect whether the table is occupied by people and the cleanliness scenario of the table according to the metadata saved in the Gstreamer buffer.
+- `prepare_ds_triton_model_repo.sh`: The script prepares the model repository by creating a folder structure for the models, copying the necessary files and directories, and converting the models to the required Triton Inference Server format. It also generates the corresponding configuration files for each model.
+- `fix_output.py`: The script changes the output of the image classifier onnx model exported from Custom Vision to match what the Triton application expects to receive. We leave the Softmax node as the last node in the graph, the tensor then gets reshaped, and that becomes the final output.
+- `Dockerfile`: This file contains the dockerfile for the Edge AI module.
+- `configs`: This directory contains the Deepstream configuration files, such as model configurations and tracker configurations.
+- `streams`: This directory contains the videos that will be used for inference.
+- `common`: This directory contains the packages needed for deepstream python bindings.
+
+
 ## Custom Pipeline Architecture 
 ![ds_arch](images/ds_architecture.png)
 
@@ -91,7 +83,7 @@ The instructions below describe how to obtain the model files and data files in 
 
 3. Put `model.onnx` and `label.txt` in the model_configs folder
 
-4. For the image classifier, run the script `fix_output.py` to do the network graph surgery to match the default Triton path's expectation and put the model.onnx in the model_configs/secondary_classifier/1/
+4. For the image classifier, run the script `fix_output.py` to do the network graph surgery to match the default Triton path's expectation and put the reshaped `model.onnx` in the model_configs/secondary_classifier/1/ 
    
 5. Config the `ds_tb_pgie_config.txt` 
    1. Modify `num_detected_classes` property to map to the number of classes or objects that you've trained your custom vision model for. 
@@ -111,14 +103,14 @@ The instructions below describe how to obtain the model files and data files in 
     ```
    
 3. Build the container image by running the following command inside the Edge AI App/ directory (where the Dockerfile is located):
-```shell
-docker build -t edgeai .
-```
+    ```shell
+    docker build -t edgeai .
+    ```
 
 4. Run the container with:
-```shell
-docker run --gpus all edgeai
-```
+    ```shell
+    docker run --gpus all edgeai
+    ```
 
 5. After the entire pipeline process is completed, an inference video named "out.mp4" will be generated. To locate this video, please check it in the "edgeai" container.
 
