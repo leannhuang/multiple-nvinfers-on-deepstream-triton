@@ -21,15 +21,15 @@
 ################################################################################
 
 infer_config {
-  unique_id: 5
+  unique_id: 1
   gpu_ids: [0]
   max_batch_size: 0
   backend {
     triton {
-      model_name: "leann"
+      model_name: "primary_detector"
       version: -1
       model_repo {
-        root: "../../triton_model_repo"
+        root: "/app/configs/model_configs"
 #        log_level: 2
         strict_model_config: true
 #        tf_gpu_memory_fraction: 0.35
@@ -55,7 +55,7 @@ infer_config {
   }
 
   postprocess {
-    labelfile_path: "../../triton_model_repo/leann/labels.txt"
+    labelfile_path: "/app/configs/model_configs/primary_detector/labels.txt"
     detection {
       num_detected_classes: 2
       custom_parse_bbox_func: "NvDsInferParseCustomYoloV2"
@@ -72,7 +72,7 @@ infer_config {
   }
 
   custom_lib {
-    path: "/opt/nvidia/deepstream/deepstream/lib/libnvdsinfer_custom_impl_Yolo_md.so"
+    path: "/app/configs/model_configs/primary_detector/libnvdsinfer_custom_impl_Yolo_md.so"
   }
 }
 input_control {

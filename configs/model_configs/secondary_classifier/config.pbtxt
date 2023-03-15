@@ -1,4 +1,4 @@
-name: "leann_2"
+name: "secondary_classifier"
 platform: "onnxruntime_onnx"
 max_batch_size : 0
 input [

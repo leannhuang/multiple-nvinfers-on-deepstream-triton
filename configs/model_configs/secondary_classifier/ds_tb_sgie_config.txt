@@ -26,10 +26,10 @@ infer_config {
   max_batch_size: 0
   backend {
     triton {
-      model_name: "leann_2"
+      model_name: "secondary_classifier"
       version: -1
       model_repo {
-        root: "../../triton_model_repo"
+        root: "/app/configs/model_configs"
         strict_model_config: true
         tf_gpu_memory_fraction: 0.0
         tf_disable_soft_placement: 0
@@ -64,6 +64,10 @@ infer_config {
   }
 }
 input_control {
-  process_mode: PROCESS_MODE_FULL_FRAME
+  #process_mode: PROCESS_MODE_FULL_FRAME
+  process_mode: PROCESS_MODE_CLIP_OBJECTS
   interval: 0
+  operate_on_gie_id: 1
+  operate_on_class_ids: [1]
+  async_mode: true
 }

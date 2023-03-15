@@ -223,3 +223,4 @@ echo "Adding read permission for downloaded models"
 find ${MODEL_REPO_DIR} -name '*.pb' -o -name 'model.*' | xargs chmod a+r
 
 echo "Model repository prepared successfully."
+python3 /app/deepstream-tc.py /app/streams/IMG_1023_3.h264

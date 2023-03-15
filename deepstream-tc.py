@@ -22,19 +22,28 @@
 import sys
 import io
 sys.path.append("../")
+import platform
+import configparser
+
 import gi
 gi.require_version("Gst", "1.0")
 from gi.repository import GLib, Gst
 from common.is_aarch_64 import is_aarch64
 from common.bus_call import bus_call
-from ssd_parser import nvds_infer_parse_custom_tf_ssd, DetectionParam, NmsParam, BoxSizeParam
 import pyds
+from tb_cleanliness_detector import tb_cleanliness_detector
+tbid_to_counter = {
+            0: {'counter': 0, 'occupancy': False, 'last_overlapped_ts': False, 'status': 'clean' }, 
+            1: {'counter': 0, 'occupancy': False, 'last_overlapped_ts': False, 'status': 'clean' }, 
+            2: {'counter': 0, 'occupancy': False, 'last_overlapped_ts': False, 'status': 'clean' }
+            }
+
+PGIE_CLASS_ID_TABLE = 1
+PGIE_CLASS_ID_PERSON = 0
 
 
-
-
-CLASS_NB = 91
-ACCURACY_ALL_CLASS = 0.5
+CLASS_NB = 2
+#ACCURACY_ALL_CLASS = 0.5
 UNTRACKED_OBJECT_ID = 0xffffffffffffffff
 IMAGE_HEIGHT = 1080
 IMAGE_WIDTH = 1920
@@ -68,10 +77,15 @@ def make_elm_or_print_err(factoryname, name, printedname, detail=""):
     return elm
 
 
+
+
 def osd_sink_pad_buffer_probe(pad, info, u_data):
     frame_number = 0
-    # Intiallizing object counter with 0.
-    obj_counter = dict(enumerate([0] * CLASS_NB))
+    #Intiallizing object counter with 0.
+    obj_counter = {
+        PGIE_CLASS_ID_PERSON:0,
+        PGIE_CLASS_ID_TABLE:0,
+    }
     num_rects = 0
 
     gst_buffer = info.get_buffer()
@@ -82,14 +96,18 @@ def osd_sink_pad_buffer_probe(pad, info, u_data):
     # Retrieve batch metadata from the gst_buffer
     # Note that pyds.gst_buffer_get_nvds_batch_meta() expects the
     # C address of gst_buffer as input, which is obtained with hash(gst_buffer)
+    # 從 gst_buffer 中檢索批處理元數據。 注意 pyds.gst_buffer_get_nvds_batch_meta() 期望 gst_buffer 的 C 地址作為輸入，這是通過 hash(gst_buffer) 獲得的
     batch_meta = pyds.gst_buffer_get_nvds_batch_meta(hash(gst_buffer))
     l_frame = batch_meta.frame_meta_list
+    
     while l_frame is not None:
+        print("11111111 start a new frame 111111")
         try:
             # Note that l_frame.data needs a cast to pyds.NvDsFrameMeta
             # The casting also keeps ownership of the underlying memory
             # in the C code, so the Python garbage collector will leave
             # it alone.
+            # 請注意，l_frame.data 需要轉換為 pyds.NvDsFrameMeta。 轉換還保留了 C 代碼中底層內存的所有權，因此 Python 垃圾收集器將不理會它。
             frame_meta = pyds.NvDsFrameMeta.cast(l_frame.data)
         except StopIteration:
             break
@@ -97,21 +115,20 @@ def osd_sink_pad_buffer_probe(pad, info, u_data):
         frame_number = frame_meta.frame_num
         num_rects = frame_meta.num_obj_meta
         l_obj = frame_meta.obj_meta_list
-        while l_obj is not None:
-            try:
-                # Casting l_obj.data to pyds.NvDsObjectMeta
-                obj_meta = pyds.NvDsObjectMeta.cast(l_obj.data)
-            except StopIteration:
-                break
-            obj_counter[obj_meta.class_id] += 1
-            try:
-                l_obj = l_obj.next
-            except StopIteration:
-                break
+        
+        
+        tb_cleanliness_detector(obj_counter, l_obj, tbid_to_counter)
+            
+            
+        
 
+                  
+
+        #print(f'-1 count: {obj_counter[-1]}')
         # Acquiring a display meta object. The memory ownership remains in
         # the C code so downstream plugins can still access it. Otherwise
         # the garbage collector will claim it when this probe function exits.
+        # 獲取顯示元對象。 內存所有權保留在 C 代碼中，因此下游插件仍然可以訪問它。 否則垃圾收集器將在該探測函數退出時認領它。
         display_meta = pyds.nvds_acquire_display_meta_from_pool(batch_meta)
         display_meta.num_labels = 1
         py_nvosd_text_params = display_meta.text_params[0]
@@ -120,17 +137,19 @@ def osd_sink_pad_buffer_probe(pad, info, u_data):
         # memory will not be claimed by the garbage collector.
         # Reading the display_text field here will return the C address of the
         # allocated string. Use pyds.get_string() to get the string content.
-        id_dict = {
-            val: index
-            for index, val in enumerate(get_label_names_from_file("labels.txt"))
-        }
-        disp_string = "Frame Number={} Number of Objects={} Vehicle_count={} Person_count={}"
-        py_nvosd_text_params.display_text = disp_string.format(
-            frame_number,
-            num_rects,
-            obj_counter[id_dict["car"]],
-            obj_counter[id_dict["person"]],
+        
+        py_nvosd_text_params.display_text = "Frame Number={} Number of Objects={} Person_count={} Table_count={} ** status_tb0:{}, status_tb1:{}, status_tb2:{}, ** occupancy_tb0:{}, occupancy_tb1:{}, occupancy_tb2:{}, ** counter_tb0:{}, counter_tb1:{}, counter_tb2:{}, ** last_overlapped_tb0:{}, last_overlapped_tb1:{}, last_overlapped_tb2:{}".format(frame_number, num_rects, obj_counter[PGIE_CLASS_ID_PERSON], obj_counter[PGIE_CLASS_ID_TABLE], 
+        tbid_to_counter[0]['status'],  tbid_to_counter[1]['status'],  tbid_to_counter[2]['status'],
+        tbid_to_counter[0]['occupancy'],  tbid_to_counter[1]['occupancy'],  tbid_to_counter[2]['occupancy'],
+        tbid_to_counter[0]['counter'],  tbid_to_counter[1]['counter'],  tbid_to_counter[2]['counter'],
+        tbid_to_counter[0]['last_overlapped_ts'],  tbid_to_counter[1]['last_overlapped_ts'],  tbid_to_counter[2]['last_overlapped_ts'],      
         )
+
+        # py_nvosd_text_params.display_text = f'Frame Number={frame_number}, \
+        # Number of Objects={num_rects}, \
+        # Person_count={ obj_counter[PGIE_CLASS_ID_PERSON]}, \
+        # Table_count={obj_counter[PGIE_CLASS_ID_TABLE]} \
+        # '
 
         # Now set the offsets where the string should appear
         py_nvosd_text_params.x_offset = 10
@@ -153,7 +172,54 @@ def osd_sink_pad_buffer_probe(pad, info, u_data):
             l_frame = l_frame.next
         except StopIteration:
             break
+        
+        print("11111111 end of a frame 111111")
 
+    #past traking meta data
+    # l_user=batch_meta.batch_user_meta_list
+    # while l_user is not None:
+    #     try:
+    #         # Note that l_user.data needs a cast to pyds.NvDsUserMeta
+    #         # The casting is done by pyds.NvDsUserMeta.cast()
+    #         # The casting also keeps ownership of the underlying memory
+    #         # in the C code, so the Python garbage collector will leave
+    #         # it alone
+    #         # 請注意，l_user.data 需要轉換為 pyds.NvDsUserMeta。 轉換由 pyds.NvDsUserMeta.cast() 完成。 轉換還保留了 C 代碼中底層內存的所有權，因此 Python 垃圾收集器將不理會它
+    #         user_meta=pyds.NvDsUserMeta.cast(l_user.data)
+    #     except StopIteration:
+    #         break
+    #     if(user_meta and user_meta.base_meta.meta_type==pyds.NvDsMetaType.NVDS_TRACKER_PAST_FRAME_META):
+    #         try:
+    #             # Note that user_meta.user_meta_data needs a cast to pyds.NvDsPastFrameObjBatch
+    #             # The casting is done by pyds.NvDsPastFrameObjBatch.cast()
+    #             # The casting also keeps ownership of the underlying memory
+    #             # in the C code, so the Python garbage collector will leave
+    #             # it alone
+    #             pPastFrameObjBatch = pyds.NvDsPastFrameObjBatch.cast(user_meta.user_meta_data)
+    #         except StopIteration:
+    #             break
+    #         for trackobj in pyds.NvDsPastFrameObjBatch.list(pPastFrameObjBatch):
+    #             print("streamId=",trackobj.streamID)
+    #             print("surfaceStreamID=",trackobj.surfaceStreamID)
+    #             for pastframeobj in pyds.NvDsPastFrameObjStream.list(trackobj):
+    #                 print("numobj=",pastframeobj.numObj)
+    #                 print("uniqueId=",pastframeobj.uniqueId)
+    #                 print("classId=",pastframeobj.classId)
+    #                 print("objLabel=",pastframeobj.objLabel)
+    #                 for objlist in pyds.NvDsPastFrameObjList.list(pastframeobj):
+    #                     print('frameNum:', objlist.frameNum)
+    #                     print('tBbox.left:', objlist.tBbox.left)
+    #                     print('tBbox.width:', objlist.tBbox.width)
+    #                     print('tBbox.top:', objlist.tBbox.top)
+    #                     print('tBbox.right:', objlist.tBbox.height)
+    #                     print('confidence:', objlist.confidence)
+    #                     print('age:', objlist.age)
+    #     try:
+    #         l_user=l_user.next
+    #     except StopIteration:
+    #         break
+        
+    
     return Gst.PadProbeReturn.OK
 
 
@@ -330,6 +396,10 @@ def main(args):
     # behaviour of inferencing is set through config file
     pgie = make_elm_or_print_err("nvinferserver", "primary-inference", "Nvinferserver")
 
+    tracker = make_elm_or_print_err("nvtracker", "tracker", "Nvtracker")
+
+    sgie = make_elm_or_print_err("nvinferserver", "secondary1-nvinference-engine", "Nvinferserver")
+
     # Use convertor to convert from NV12 to RGBA as required by nvosd
     nvvidconv = make_elm_or_print_err("nvvideoconvert", "convertor", "Nvvidconv")
 
@@ -370,11 +440,51 @@ def main(args):
 
     print("Playing file %s " % args[1])
     source.set_property("location", args[1])
+    streammux.set_property("live-source", 0)
+    streammux.set_property("enable-padding", 0)
+    streammux.set_property("nvbuf-memory-type", 0)
     streammux.set_property("width", IMAGE_WIDTH)
     streammux.set_property("height", IMAGE_HEIGHT)
     streammux.set_property("batch-size", 1)
-    streammux.set_property("batched-push-timeout", 4000000)
-    pgie.set_property("config-file-path", "dstest_ssd_nopostprocess.txt")
+    streammux.set_property("batched-push-timeout", 40000)
+
+    
+    #Set properties of pgie and sgie
+    pgie.set_property("config-file-path", "/app/configs/model_configs/primary_detector/ds_tb_pgie_config.txt")
+    # pgie.set_property("gie-unique-id", 1)
+    sgie.set_property('config-file-path', "/app/configs/model_configs/secondary_classifier/ds_tb_sgie_config.txt")
+    # sgie.set_property("operate-on-gie-id", 1)
+    # sgie.set_property('operate-on-class-ids', 1)
+
+    #Set properties of tracker
+    config = configparser.ConfigParser()
+    config.read('/app/configs/tracker_configs/dstest2_tracker_config.txt')
+    config.sections()
+
+    for key in config['tracker']:
+        if key == 'tracker-width' :
+            tracker_width = config.getint('tracker', key)
+            tracker.set_property('tracker-width', tracker_width)
+        if key == 'tracker-height' :
+            tracker_height = config.getint('tracker', key)
+            tracker.set_property('tracker-height', tracker_height)
+        if key == 'gpu-id' :
+            tracker_gpu_id = config.getint('tracker', key)
+            tracker.set_property('gpu_id', tracker_gpu_id)
+        if key == 'll-lib-file' :
+            tracker_ll_lib_file = config.get('tracker', key)
+            tracker.set_property('ll-lib-file', tracker_ll_lib_file)
+        if key == 'll-config-file' :
+            tracker_ll_config_file = config.get('tracker', key)
+            tracker.set_property('ll-config-file', tracker_ll_config_file)
+        if key == 'enable-batch-process' :
+            tracker_enable_batch_process = config.getint('tracker', key)
+            tracker.set_property('enable_batch_process', tracker_enable_batch_process)
+        if key == 'enable-past-frame' :
+            tracker_enable_past_frame = config.getint('tracker', key)
+            tracker.set_property('enable_past_frame', tracker_enable_past_frame)
+
+
 
     print("Adding elements to Pipeline \n")
     pipeline.add(source)
@@ -382,6 +492,8 @@ def main(args):
     pipeline.add(decoder)
     pipeline.add(streammux)
     pipeline.add(pgie)
+    pipeline.add(tracker)
+    pipeline.add(sgie)
     pipeline.add(nvvidconv)
     pipeline.add(nvosd)
     pipeline.add(queue)
@@ -394,7 +506,7 @@ def main(args):
 
     # we link the elements together
     # file-source -> h264-parser -> nvh264-decoder ->
-    # nvinfer -> nvvidconv -> nvosd -> video-renderer
+    # nvinfer -> tracker -> nvinfer -> nvvidconv -> nvosd -> video-renderer
     print("Linking elements in the Pipeline \n")
     source.link(h264parser)
     h264parser.link(decoder)
@@ -407,7 +519,9 @@ def main(args):
         sys.stderr.write(" Unable to get source pad of decoder \n")
     srcpad.link(sinkpad)
     streammux.link(pgie)
-    pgie.link(nvvidconv)
+    pgie.link(tracker)
+    tracker.link(sgie)
+    sgie.link(nvvidconv)
     nvvidconv.link(nvosd)
     nvosd.link(queue)
     queue.link(nvvidconv2)
@@ -428,7 +542,7 @@ def main(args):
     if not pgiesrcpad:
         sys.stderr.write(" Unable to get src pad of primary infer \n")
 
-    pgiesrcpad.add_probe(Gst.PadProbeType.BUFFER, pgie_src_pad_buffer_probe, 0)
+    #pgiesrcpad.add_probe(Gst.PadProbeType.BUFFER, pgie_src_pad_buffer_probe, 0)
 
     # Lets add probe to get informed of the meta data generated, we add probe to
     # the sink pad of the osd element, since by that time, the buffer would have
